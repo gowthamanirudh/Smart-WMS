@@ -1,59 +1,74 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import pool from './db';
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Inventory item interface
-interface InventoryItem {
-  id: number;
-  name: string;
-  quantity: number;
-}
-
-// In-memory inventory data (mocked for now)
-let inventory: InventoryItem[] = [
-  { id: 1, name: 'Item A', quantity: 100 },
-  { id: 2, name: 'Item B', quantity: 200 },
-];
-
-// Get all inventory items
-app.get('/inventory', (req: Request, res: Response) => {
-  res.json(inventory);
-});
-
-// Add a new item to inventory
-app.post('/inventory', (req: Request, res: Response) => {
-  const { name, quantity } = req.body;
-  const newItem: InventoryItem = {
-    id: inventory.length + 1,
-    name,
-    quantity,
-  };
-  inventory.push(newItem);
-  res.status(201).json(newItem);
-});
-
-// Update an existing item in inventory
-app.put('/inventory/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { name, quantity } = req.body;
-  let item = inventory.find((item) => item.id === parseInt(id));
-  if (item) {
-    item.name = name;
-    item.quantity = quantity;
-    res.json(item);
-  } else {
-    res.status(404).json({ message: 'Item not found' });
+// Get all inventory items from PostgreSQL
+app.get('/inventory', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM inventory');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Delete an item from inventory
-app.delete('/inventory/:id', (req: Request, res: Response) => {
+// Add a new item to inventory
+app.post('/inventory', async (req: Request, res: Response) => {
+  const { name, quantity } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO inventory (name, quantity) VALUES ($1, $2) RETURNING *',
+      [name, quantity]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update an existing item
+app.put('/inventory/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  inventory = inventory.filter((item) => item.id !== parseInt(id));
-  res.status(200).json({ message: 'Item deleted successfully' });
+  const { name, quantity } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE inventory SET name = $1, quantity = $2 WHERE id = $3 RETURNING *',
+      [name, quantity, id]
+    );
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.status(404).json({ message: 'Item not found' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete an item
+app.delete('/inventory/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      'DELETE FROM inventory WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (result.rows.length > 0) {
+      res.json({ message: 'Item deleted successfully' });
+    } else {
+      res.status(404).json({ message: 'Item not found' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // Start the server
