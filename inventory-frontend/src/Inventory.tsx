@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { InventoryItem, NewItem } from './types';
+import { db } from './firebase';
+import { addDoc, collection, deleteDoc, getDocs, onSnapshot } from 'firebase/firestore';
 
 const Inventory: React.FC = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -9,21 +11,46 @@ const Inventory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    axios
-      .get<InventoryItem[]>('http://localhost:5000/inventory')
-      .then((response) => setInventory(response.data))
-      .catch((error) => console.error('Error fetching inventory:', error));
+    // Fetch from PostgreSQL (initial load)
+    axios.get<InventoryItem[]>('http://localhost:5000/inventory')
+      .then(response => setInventory(response.data))
+      .catch(error => console.error("Error fetching inventory:", error));
+  
+    // Listen to real-time Firebase updates
+    const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
+      const firebaseItems = snapshot.docs.map(doc => ({
+        id: doc.data().id, 
+        name: doc.data().name,
+        quantity: doc.data().quantity
+      }));
+      setInventory(firebaseItems);
+    });
+  
+    return () => unsubscribe(); // Cleanup listener
   }, []);
+  
 
-  const handleAddItem = () => {
-    axios
-      .post<InventoryItem>('http://localhost:5000/inventory', newItem)
-      .then((response) => {
-        setInventory([...inventory, response.data]);
-        setNewItem({ name: '', quantity: 0 });
-      })
-      .catch((error) => console.error('Error adding item:', error));
+  const handleAddItem = async () => {
+    try {
+      // Add to PostgreSQL
+      const response = await axios.post<InventoryItem>('http://localhost:5000/inventory', newItem);
+      const savedItem = response.data;
+      
+      // Add to Firebase Firestore
+      await addDoc(collection(db, "inventory"), {
+        id: savedItem.id, // Ensure it matches PostgreSQL ID
+        name: savedItem.name,
+        quantity: savedItem.quantity,
+        timestamp: new Date(),
+      });
+  
+      setInventory([...inventory, savedItem]);
+      setNewItem({ name: '', quantity: 0 });
+    } catch (error) {
+      console.error("Error adding item:", error);
+    }
   };
+  
 
   const handleUpdateItem = () => {
     if (editItem) {
@@ -37,14 +64,26 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const handleDeleteItem = (id: number) => {
-    axios
-      .delete(`http://localhost:5000/inventory/${id}`)
-      .then(() => {
-        setInventory(inventory.filter((item) => item.id !== id));
-      })
-      .catch((error) => console.error('Error deleting item:', error));
+  const handleDeleteItem = async (id: number) => {
+    try {
+      // Delete from PostgreSQL
+      await axios.delete(`http://localhost:5000/inventory/${id}`);
+  
+      // Delete from Firebase
+      const inventoryRef = collection(db, "inventory");
+      const querySnapshot = await getDocs(inventoryRef);
+      querySnapshot.forEach(async (doc) => {
+        if (doc.data().id === id) {
+          await deleteDoc(doc.ref);
+        }
+      });
+  
+      setInventory(inventory.filter((item) => item.id !== id));
+    } catch (error) {
+      console.error("Error deleting item:", error);
+    }
   };
+  
 
   const filteredInventory = inventory.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
