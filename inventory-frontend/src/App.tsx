@@ -1,11 +1,13 @@
 import React from 'react';
-import Inventory from './Inventory';
+import Sidebar from './Sidebar';
 import './App.css';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 const App: React.FC = () => {
   return (
     <div className="App">
-      <Inventory />
+      <Sidebar/>
+      {/* <Inventory /> */}
     </div>
   );
 };

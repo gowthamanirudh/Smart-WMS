@@ -1,0 +1,48 @@
+# Node.js dependencies
+node_modules/
+/inventory-backend/node_modules/*
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
+.firebase.json
+# TypeScript build output
+dist/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+yarn-error.log
+debug.log
+error.log
+
+# Environment Variables (Sensitive Information)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Firebase Credentials (Important!)
+serviceAccountKey.json
+
+# Database Files
+*.sqlite
+*.sqlite3
+*.db
+
+# VSCode & Editor-specific settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Miscellaneous
+*.bak
+*.swp
+*.tmp
