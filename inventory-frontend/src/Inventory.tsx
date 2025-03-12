@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { InventoryItem, NewItem } from './types';
 import { db } from './firebase';
+import { supabase } from './supabaseClient';
+import './inventory.css';
 import { addDoc, collection, deleteDoc, getDocs, onSnapshot } from 'firebase/firestore';
 
 const Inventory: React.FC = () => {
@@ -11,79 +12,98 @@ const Inventory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Fetch from PostgreSQL (initial load)
-    axios.get<InventoryItem[]>('http://localhost:5000/inventory')
-      .then(response => setInventory(response.data))
-      .catch(error => console.error("Error fetching inventory:", error));
-  
-    // Listen to real-time Firebase updates
+    // Fetch inventory from Supabase
+    const fetchSupabaseInventory = async () => {
+      const { data, error } = await supabase.from('inventory').select('*');
+      if (error) {
+        console.error("❌ Supabase Error:", error);
+      } else {
+        console.log("✅ Supabase Inventory:", data);
+        setInventory(data || []);
+      }
+    };
+
+    fetchSupabaseInventory();
+
+    // Listen for real-time updates from Firebase
     const unsubscribe = onSnapshot(collection(db, "inventory"), (snapshot) => {
       const firebaseItems = snapshot.docs.map(doc => ({
         id: doc.data().id, 
         name: doc.data().name,
         quantity: doc.data().quantity
       }));
-      setInventory(firebaseItems);
+      console.log("🔄 Firebase Updates:", firebaseItems);
+      setInventory(firebaseItems); // Comment this out if you don't want Firebase to overwrite Supabase data
     });
-  
+
     return () => unsubscribe(); // Cleanup listener
   }, []);
-  
 
   const handleAddItem = async () => {
     try {
-      // Add to PostgreSQL
-      const response = await axios.post<InventoryItem>('http://localhost:5000/inventory', newItem);
-      const savedItem = response.data;
-      
-      // Add to Firebase Firestore
+      // Insert into Supabase
+      const { data, error } = await supabase.from('inventory').insert([
+        { name: newItem.name, quantity: newItem.quantity }
+      ]).select();
+
+      if (error) throw error;
+      const savedItem = data[0];
+
+      // Insert into Firebase Firestore
       await addDoc(collection(db, "inventory"), {
-        id: savedItem.id, // Ensure it matches PostgreSQL ID
+        id: savedItem.id, // Ensure Firebase stores the same ID as Supabase
         name: savedItem.name,
         quantity: savedItem.quantity,
         timestamp: new Date(),
       });
-  
+
       setInventory([...inventory, savedItem]);
       setNewItem({ name: '', quantity: 0 });
     } catch (error) {
-      console.error("Error adding item:", error);
+      console.error("❌ Error adding item:", error);
     }
   };
-  
 
-  const handleUpdateItem = () => {
+  const handleUpdateItem = async () => {
     if (editItem) {
-      axios
-        .put<InventoryItem>(`http://localhost:5000/inventory/${editItem.id}`, editItem)
-        .then((response) => {
-          setInventory(inventory.map((item) => (item.id === editItem.id ? response.data : item)));
-          setEditItem(null);
-        })
-        .catch((error) => console.error('Error updating item:', error));
+      try {
+        // Update in Supabase
+        const { error } = await supabase
+          .from('inventory')
+          .update({ name: editItem.name, quantity: editItem.quantity })
+          .eq('id', editItem.id);
+
+        if (error) throw error;
+
+        setInventory(inventory.map(item => (item.id === editItem.id ? editItem : item)));
+        setEditItem(null);
+      } catch (error) {
+        console.error('❌ Error updating item:', error);
+      }
     }
   };
 
   const handleDeleteItem = async (id: number) => {
     try {
-      // Delete from PostgreSQL
-      await axios.delete(`http://localhost:5000/inventory/${id}`);
-  
-      // Delete from Firebase
+      // Delete from Firebase first
       const inventoryRef = collection(db, "inventory");
       const querySnapshot = await getDocs(inventoryRef);
+      
       querySnapshot.forEach(async (doc) => {
         if (doc.data().id === id) {
           await deleteDoc(doc.ref);
         }
       });
-  
+
+      // Delete from Supabase
+      const { error } = await supabase.from('inventory').delete().eq('id', id);
+      if (error) throw error;
+
       setInventory(inventory.filter((item) => item.id !== id));
     } catch (error) {
-      console.error("Error deleting item:", error);
+      console.error("❌ Error deleting item:", error);
     }
   };
-  
 
   const filteredInventory = inventory.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -192,10 +212,10 @@ const Inventory: React.FC = () => {
                   </td>
                   <td>
                     <button className="btn btn-warning btn-sm me-2" onClick={() => setEditItem(item)}>
-                      <i className="bi bi-pencil-square"></i> Edit
+                      ✏️ Edit
                     </button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDeleteItem(item.id)}>
-                      <i className="bi bi-trash"></i> Delete
+                      🗑️ Delete
                     </button>
                   </td>
                 </tr>
