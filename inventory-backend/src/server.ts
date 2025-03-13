@@ -12,7 +12,7 @@ app.use(cors());
 // Get all inventory items from PostgreSQL
 app.get('/inventory', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM inventory');
+    const result = await pool.query('SELECT * FROM inventory ORDER BY id');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -57,21 +57,49 @@ app.put('/inventory/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Delete item from PostgreSQL
+// Optimized Delete item from PostgreSQL with ID Reordering
 app.delete('/inventory/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      'DELETE FROM inventory WHERE id = $1 RETURNING *',
-      [id]
-    );
+    // Start transaction
+    await pool.query('BEGIN');
+
+    // Delete the requested item
+    const result = await pool.query('DELETE FROM inventory WHERE id = $1 RETURNING *', [id]);
 
     if (result.rows.length > 0) {
-      res.json({ message: 'Item deleted successfully' });
+      // Get the maximum ID before reordering
+      const maxIdResult = await pool.query('SELECT MAX(id) FROM inventory');
+      const maxId = maxIdResult.rows[0].max;
+
+      // Only reorder if the deleted ID was not the last ID
+      if (id < maxId) {
+        await pool.query(`
+          WITH reordered AS (
+            SELECT id, ROW_NUMBER() OVER () AS new_id FROM inventory ORDER BY id
+          )
+          UPDATE inventory
+          SET id = reordered.new_id
+          FROM reordered
+          WHERE inventory.id = reordered.id;
+        `);
+
+        // Reset sequence
+        await pool.query(`
+          SELECT setval('inventory_id_seq', COALESCE((SELECT MAX(id) FROM inventory), 0), false);
+        `);
+      }
+
+      // Commit transaction
+      await pool.query('COMMIT');
+
+      res.json({ message: 'Item deleted and IDs reordered successfully' });
     } else {
+      await pool.query('ROLLBACK'); // Rollback if no item found
       res.status(404).json({ message: 'Item not found' });
     }
   } catch (err) {
+    await pool.query('ROLLBACK'); // Ensure rollback on error
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
