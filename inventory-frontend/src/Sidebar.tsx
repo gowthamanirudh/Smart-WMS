@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaBoxes, FaChartBar, FaInfoCircle, FaTools, FaEnvelope, FaBars } from 'react-icons/fa';
+import { FaBoxes, FaChartBar, FaInfoCircle,FaBars } from 'react-icons/fa';
 import Inventory from './Inventory';
 
 const Sidebar: React.FC = () => {
@@ -21,6 +21,11 @@ const Sidebar: React.FC = () => {
 
         <ul className="nav flex-column">
           <li className="nav-item">
+            <button className="btn btn-dark w-100 text-start" onClick={() => setActivePage('about')}>
+              <FaInfoCircle /> {isOpen && 'About'}
+            </button>
+          </li>
+          <li className="nav-item">
             <button className="btn btn-dark w-100 text-start" onClick={() => setActivePage('inventory')}>
               <FaBoxes /> {isOpen && 'Inventory'}
             </button>
@@ -30,12 +35,12 @@ const Sidebar: React.FC = () => {
               <FaChartBar /> {isOpen && 'Dashboard'}
             </button>
           </li>
-          <li className="nav-item">
+          {/* <li className="nav-item">
             <button className="btn btn-dark w-100 text-start" onClick={() => setActivePage('about')}>
               <FaInfoCircle /> {isOpen && 'About'}
             </button>
-          </li>
-          <li className="nav-item">
+          </li> */}
+          {/* <li className="nav-item">
             <button className="btn btn-dark w-100 text-start" onClick={() => setActivePage('services')}>
               <FaTools /> {isOpen && 'Services'}
             </button>
@@ -44,7 +49,7 @@ const Sidebar: React.FC = () => {
             <button className="btn btn-dark w-100 text-start" onClick={() => setActivePage('contact')}>
               <FaEnvelope /> {isOpen && 'Contact'}
             </button>
-          </li>
+          </li> */}
         </ul>
       </div>
 
@@ -53,8 +58,8 @@ const Sidebar: React.FC = () => {
         {activePage === 'inventory' && <Inventory />}
         {activePage === 'dashboard' && <h2>📊 Dashboard Coming Soon!</h2>}
         {activePage === 'about' && <h2>ℹ️ About Us</h2>}
-        {activePage === 'services' && <h2>🔧 Our Services</h2>}
-        {activePage === 'contact' && <h2>📩 Contact Us</h2>}
+        {/* {activePage === 'services' && <h2>🔧 Our Services</h2>}
+        {activePage === 'contact' && <h2>📩 Contact Us</h2>} */}
       </div>
     </div>
   );

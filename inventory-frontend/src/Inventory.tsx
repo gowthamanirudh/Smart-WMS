@@ -40,11 +40,15 @@ const Inventory: React.FC = () => {
   const handleDeleteItem = async (id: number) => {
     try {
       await axios.delete(`http://localhost:5000/inventory/${id}`);
-      setInventory(inventory.filter((item) => item.id !== id));
+  
+      // Fetch updated inventory to reflect reordered positions
+      const response = await axios.get<InventoryItem[]>('http://localhost:5000/inventory');
+      setInventory(response.data);
     } catch (error) {
       console.error("Error deleting item:", error);
     }
   };
+  
 
   const filteredInventory = inventory.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
